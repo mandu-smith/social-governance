@@ -47,3 +47,53 @@
     is-currently-active: bool
   }
 )
+
+;; User voting interaction tracking
+(define-map user-voting-history
+  { voter-principal: principal, post-id: uint }
+  { vote-timestamp: uint }
+)
+
+;; Comprehensive user reputation and activity metrics
+(define-map platform-user-profiles
+  { user-principal: principal }
+  {
+    current-reputation-score: uint,
+    total-content-published: uint,
+    total-votes-given: uint,
+    account-registration-block: uint
+  }
+)
+
+;; Featured and promoted content registry
+(define-map promoted-content-registry
+  { post-id: uint }
+  {
+    promotion-timestamp: uint,
+    promotion-description: (string-ascii 50)
+  }
+)
+
+;; PLATFORM STATE VARIABLES
+
+(define-data-var contract-administrator-principal principal tx-sender)
+(define-data-var global-content-id-counter uint u0)
+(define-data-var platform-fee-percentage uint default-platform-fee-percentage)
+(define-data-var minimum-reputation-for-content-promotion uint minimum-reputation-for-promotion)
+
+;; UTILITY AND VALIDATION FUNCTIONS
+
+;; Comprehensive content validation with status checking
+(define-private (validate-content-availability (post-id uint))
+  (let ((content-record (map-get? published-content-database { post-id: post-id })))
+    (if (is-some content-record)
+      (let ((content-data (unwrap-panic content-record)))
+        (if (get is-currently-active content-data)
+          (ok content-data)
+          ERR-CONTENT-NOT-FOUND
+        )
+      )
+      ERR-CONTENT-NOT-FOUND
+    )
+  )
+)
