@@ -97,3 +97,42 @@
     )
   )
 )
+
+;; READ-ONLY QUERY FUNCTIONS
+
+;; Retrieve complete content information by ID
+(define-read-only (fetch-content-by-id (post-id uint))
+  (map-get? published-content-database { post-id: post-id })
+)
+
+;; Check user's voting status for specific content
+(define-read-only (check-user-vote-status (user-address principal) (post-id uint))
+  (is-some (map-get? user-voting-history { voter-principal: user-address, post-id: post-id }))
+)
+
+
+
+;; Platform statistics and metrics
+(define-read-only (get-platform-content-count)
+  (var-get global-content-id-counter)
+)
+
+;; Content promotion status verification
+(define-read-only (check-content-promotion-status (post-id uint))
+  (is-some (map-get? promoted-content-registry { post-id: post-id }))
+)
+
+;; Current platform fee configuration
+(define-read-only (get-current-platform-fee-rate)
+  (var-get platform-fee-percentage)
+)
+
+;; Content discovery and ranking (requires external indexing)
+(define-read-only (discover-trending-content (category-filter (string-ascii 20)) (limit-results uint))
+  (err "Trending content discovery requires external indexing service integration")
+)
+
+;; Current platform administrator
+(define-read-only (get-platform-administrator)
+  (var-get contract-administrator-principal)
+)
