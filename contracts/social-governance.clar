@@ -44,13 +44,16 @@
     publication-timestamp: uint,
     total-upvote-count: uint,
     content-category-tag: (string-ascii 20),
-    is-currently-active: bool
+    is-currently-active: bool,
   }
 )
 
 ;; User voting interaction tracking
 (define-map user-voting-history
-  { voter-principal: principal, post-id: uint }
+  {
+    voter-principal: principal,
+    post-id: uint,
+  }
   { vote-timestamp: uint }
 )
 
@@ -61,7 +64,7 @@
     current-reputation-score: uint,
     total-content-published: uint,
     total-votes-given: uint,
-    account-registration-block: uint
+    account-registration-block: uint,
   }
 )
 
@@ -70,7 +73,7 @@
   { post-id: uint }
   {
     promotion-timestamp: uint,
-    promotion-description: (string-ascii 50)
+    promotion-description: (string-ascii 50),
   }
 )
 
@@ -106,11 +109,15 @@
 )
 
 ;; Check user's voting status for specific content
-(define-read-only (check-user-vote-status (user-address principal) (post-id uint))
-  (is-some (map-get? user-voting-history { voter-principal: user-address, post-id: post-id }))
+(define-read-only (check-user-vote-status
+    (user-address principal)
+    (post-id uint)
+  )
+  (is-some (map-get? user-voting-history {
+    voter-principal: user-address,
+    post-id: post-id,
+  }))
 )
-
-
 
 ;; Platform statistics and metrics
 (define-read-only (get-platform-content-count)
@@ -128,7 +135,10 @@
 )
 
 ;; Content discovery and ranking (requires external indexing)
-(define-read-only (discover-trending-content (category-filter (string-ascii 20)) (limit-results uint))
+(define-read-only (discover-trending-content
+    (category-filter (string-ascii 20))
+    (limit-results uint)
+  )
   (err "Trending content discovery requires external indexing service integration")
 )
 
@@ -141,19 +151,27 @@
 (define-public (remove-content-from-featured (target-post-id uint))
   (begin
     ;; Input validation
-    (asserts! (and (>= target-post-id u0) 
-                  (< target-post-id (var-get global-content-id-counter))) 
-              ERR-INVALID-CONTENT-REFERENCE)
-    
+    (asserts!
+      (and
+        (>= target-post-id u0)
+        (< target-post-id (var-get global-content-id-counter))
+      )
+      ERR-INVALID-CONTENT-REFERENCE
+    )
+
     ;; Admin access verification
-    (asserts! (is-eq tx-sender (var-get contract-administrator-principal)) ERR-UNAUTHORIZED-ACCESS)
-    
+    (asserts! (is-eq tx-sender (var-get contract-administrator-principal))
+      ERR-UNAUTHORIZED-ACCESS
+    )
+
     ;; Verify content exists
-    (asserts! (is-some (fetch-content-by-id target-post-id)) ERR-CONTENT-NOT-FOUND)
-    
+    (asserts! (is-some (fetch-content-by-id target-post-id))
+      ERR-CONTENT-NOT-FOUND
+    )
+
     ;; Remove from promotion registry
     (map-delete promoted-content-registry { post-id: target-post-id })
-    
+
     (ok true)
   )
 )
@@ -164,33 +182,34 @@
 (define-public (set-content-inactive (target-post-id uint))
   (begin
     ;; Input validation
-    (asserts! (and (>= target-post-id u0) 
-                  (< target-post-id (var-get global-content-id-counter))) 
-              ERR-INVALID-CONTENT-REFERENCE)
-    
-    (let
-      (
+    (asserts!
+      (and
+        (>= target-post-id u0)
+        (< target-post-id (var-get global-content-id-counter))
+      )
+      ERR-INVALID-CONTENT-REFERENCE
+    )
+
+    (let (
         (requesting-user tx-sender)
         (content-data (unwrap! (fetch-content-by-id target-post-id) ERR-CONTENT-NOT-FOUND))
         (is-content-owner (is-eq requesting-user (get author-principal content-data)))
         (is-platform-admin (is-eq requesting-user (var-get contract-administrator-principal)))
       )
-      
       ;; Verify user has deactivation privileges
       (asserts! (or is-content-owner is-platform-admin) ERR-UNAUTHORIZED-ACCESS)
-      
+
       ;; Update content status to inactive
-      (map-set published-content-database
-        { post-id: target-post-id }
+      (map-set published-content-database { post-id: target-post-id }
         (merge content-data { is-currently-active: false })
       )
-      
+
       ;; Remove from promoted registry if present
       (if (check-content-promotion-status target-post-id)
         (map-delete promoted-content-registry { post-id: target-post-id })
         true
       )
-      
+
       (ok true)
     )
   )
@@ -200,30 +219,32 @@
 (define-public (set-content-active (target-post-id uint))
   (begin
     ;; Input validation
-    (asserts! (and (>= target-post-id u0) 
-                  (< target-post-id (var-get global-content-id-counter))) 
-              ERR-INVALID-CONTENT-REFERENCE)
-    
-    (let
-      (
+    (asserts!
+      (and
+        (>= target-post-id u0)
+        (< target-post-id (var-get global-content-id-counter))
+      )
+      ERR-INVALID-CONTENT-REFERENCE
+    )
+
+    (let (
         (requesting-user tx-sender)
         (content-data (unwrap! (fetch-content-by-id target-post-id) ERR-CONTENT-NOT-FOUND))
       )
-      
       ;; Verify user is content owner
-      (asserts! (is-eq requesting-user (get author-principal content-data)) ERR-UNAUTHORIZED-ACCESS)
-      
+      (asserts! (is-eq requesting-user (get author-principal content-data))
+        ERR-UNAUTHORIZED-ACCESS
+      )
+
       ;; Update content status to active
-      (map-set published-content-database
-        { post-id: target-post-id }
+      (map-set published-content-database { post-id: target-post-id }
         (merge content-data { is-currently-active: true })
       )
-      
+
       (ok true)
     )
   )
 )
-
 
 ;; ADMINISTRATIVE FUNCTIONS
 
@@ -231,14 +252,83 @@
 (define-public (configure-platform-fee (new-fee-percentage uint))
   (begin
     ;; Admin access verification
-    (asserts! (is-eq tx-sender (var-get contract-administrator-principal)) ERR-UNAUTHORIZED-ACCESS)
-    
+    (asserts! (is-eq tx-sender (var-get contract-administrator-principal))
+      ERR-UNAUTHORIZED-ACCESS
+    )
+
     ;; Validate fee is within reasonable bounds
-    (asserts! (<= new-fee-percentage maximum-commission-rate) ERR-INVALID-INPUT-PARAMETER)
-    
+    (asserts! (<= new-fee-percentage maximum-commission-rate)
+      ERR-INVALID-INPUT-PARAMETER
+    )
+
     ;; Update platform fee
     (var-set platform-fee-percentage new-fee-percentage)
-    
+
+    (ok true)
+  )
+)
+
+;; Update minimum reputation threshold for content promotion (admin only)
+(define-public (configure-promotion-reputation-threshold (new-threshold uint))
+  (begin
+    ;; Admin access verification
+    (asserts! (is-eq tx-sender (var-get contract-administrator-principal))
+      ERR-UNAUTHORIZED-ACCESS
+    )
+
+    ;; Validate threshold is reasonable
+    (asserts! (<= new-threshold maximum-reputation-threshold)
+      ERR-INVALID-INPUT-PARAMETER
+    )
+
+    ;; Update reputation threshold
+    (var-set minimum-reputation-for-content-promotion new-threshold)
+
+    (ok true)
+  )
+)
+
+;; Transfer administrative privileges (admin only)
+(define-public (transfer-platform-administration (new-admin-principal principal))
+  (begin
+    ;; Admin access verification
+    (asserts! (is-eq tx-sender (var-get contract-administrator-principal))
+      ERR-UNAUTHORIZED-ACCESS
+    )
+
+    ;; Validate new administrator is not null address
+    (asserts! (not (is-eq new-admin-principal 'SP000000000000000000002Q6VF78))
+      ERR-INVALID-INPUT-PARAMETER
+    )
+
+    ;; Transfer administrative rights
+    (var-set contract-administrator-principal new-admin-principal)
+
+    (ok true)
+  )
+)
+
+;; CONTRACT INITIALIZATION
+
+;; Initialize platform with custom administrator
+(define-public (initialize-platform-configuration (initial-admin principal))
+  (begin
+    ;; Current admin access verification
+    (asserts! (is-eq tx-sender (var-get contract-administrator-principal))
+      ERR-UNAUTHORIZED-ACCESS
+    )
+
+    ;; Validate new administrator is not null address
+    (asserts! (not (is-eq initial-admin 'SP000000000000000000002Q6VF78))
+      ERR-INVALID-INPUT-PARAMETER
+    )
+
+    ;; Set initial administrator if different from deployer
+    (if (not (is-eq (var-get contract-administrator-principal) initial-admin))
+      (var-set contract-administrator-principal initial-admin)
+      true
+    )
+
     (ok true)
   )
 )
