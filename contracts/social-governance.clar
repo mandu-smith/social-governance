@@ -136,3 +136,62 @@
 (define-read-only (get-platform-administrator)
   (var-get contract-administrator-principal)
 )
+
+;; Remove content from featured status (admin only)
+(define-public (remove-content-from-featured (target-post-id uint))
+  (begin
+    ;; Input validation
+    (asserts! (and (>= target-post-id u0) 
+                  (< target-post-id (var-get global-content-id-counter))) 
+              ERR-INVALID-CONTENT-REFERENCE)
+    
+    ;; Admin access verification
+    (asserts! (is-eq tx-sender (var-get contract-administrator-principal)) ERR-UNAUTHORIZED-ACCESS)
+    
+    ;; Verify content exists
+    (asserts! (is-some (fetch-content-by-id target-post-id)) ERR-CONTENT-NOT-FOUND)
+    
+    ;; Remove from promotion registry
+    (map-delete promoted-content-registry { post-id: target-post-id })
+    
+    (ok true)
+  )
+)
+
+;; CONTENT STATUS MANAGEMENT
+
+;; Deactivate content (author or admin only)
+(define-public (set-content-inactive (target-post-id uint))
+  (begin
+    ;; Input validation
+    (asserts! (and (>= target-post-id u0) 
+                  (< target-post-id (var-get global-content-id-counter))) 
+              ERR-INVALID-CONTENT-REFERENCE)
+    
+    (let
+      (
+        (requesting-user tx-sender)
+        (content-data (unwrap! (fetch-content-by-id target-post-id) ERR-CONTENT-NOT-FOUND))
+        (is-content-owner (is-eq requesting-user (get author-principal content-data)))
+        (is-platform-admin (is-eq requesting-user (var-get contract-administrator-principal)))
+      )
+      
+      ;; Verify user has deactivation privileges
+      (asserts! (or is-content-owner is-platform-admin) ERR-UNAUTHORIZED-ACCESS)
+      
+      ;; Update content status to inactive
+      (map-set published-content-database
+        { post-id: target-post-id }
+        (merge content-data { is-currently-active: false })
+      )
+      
+      ;; Remove from promoted registry if present
+      (if (check-content-promotion-status target-post-id)
+        (map-delete promoted-content-registry { post-id: target-post-id })
+        true
+      )
+      
+      (ok true)
+    )
+  )
+)
